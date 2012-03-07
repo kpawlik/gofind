@@ -28,7 +28,11 @@ func setup(t *testing.T) {
 		if dir, _ := path.Split(f); dir != "" {
 			os.MkdirAll(path.Join(cwd, dir), os.ModePerm)
 		}
-		os.Create(f)
+		f, err := os.Create(f)
+		if err !=nil{
+			t.Error(err)
+		}
+		defer f.Close()
 	}
 }
 //remove temp files
