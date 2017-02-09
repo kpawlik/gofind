@@ -1,11 +1,65 @@
-// gofind2.go.go
+// gofind.go
 package gofind
 
 import (
+	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"regexp"
+	"sync"
 )
+
+const (
+	workersNo = 1
+)
+
+var (
+	//dirQueue chan string = make(chan string, workersNo*100000)
+
+	fileQueue chan string = make(chan string, 10000)
+	//counter   int             = 0
+	//counterMx *sync.Mutex     = &sync.Mutex{}
+	resultQueue *cn             = newCn()
+	wg          *sync.WaitGroup = &sync.WaitGroup{}
+	results     []string        = []string{}
+)
+
+type cn struct {
+	open    bool
+	c       chan string
+	counter int
+	mx      *sync.Mutex
+}
+
+func newCn() *cn {
+	return &cn{true, make(chan string, workersNo*100000), 0, &sync.Mutex{}}
+}
+
+func (c *cn) Send(s string) {
+	c.mx.Lock()
+	c.counter++
+	c.mx.Unlock()
+	c.c <- s
+}
+
+func (c *cn) Get() (string, bool) {
+	res, ok := <-c.c
+	c.mx.Lock()
+	c.counter--
+	c.mx.Unlock()
+	return res, ok
+}
+
+func (c *cn) Close() {
+	if c.open {
+		c.mx.Lock()
+		close(c.c)
+		c.open = false
+		c.mx.Unlock()
+	}
+}
 
 // Config struct of find funcionalitu
 //    StartPath - root directory to start search
@@ -16,131 +70,99 @@ type Config struct {
 	StartPath            string
 	SearchNamePattern    *regexp.Regexp
 	SearchContentPattern *regexp.Regexp
+	SearchByName         bool
+	SearchByContent      bool
 }
 
 //
-// NewConfig create new instance of Config 
+// NewConfig create new instance of Config
 //
-func NewConfig(startDir string, snp, scp string) Config {
-	snpRe := regexp.MustCompile(snp)
-	scpRe := regexp.MustCompile(scp)
-	return Config{startDir, snpRe, scpRe}
-}
-
-//
-// Func returns list of files which maches to patterns from conf
-//
-func Find(conf Config) []string {
-	// Chanel to recive names of matching files
-	var namesCh = make(chan string)
-	// Chanel to recive names of dir names 
-	var dirCh = make(chan string)
-	// chanel to recive finished dirs
-	var processedCh = make(chan string)
-	files := process(conf, namesCh, dirCh, processedCh)
-	return files
-}
-
-//
-// Function gets channel as parameters. Sends to outCh files
-// which matches to patters from conf
-func GoFind(conf Config, outCh chan string) {
-	// Chanel to recive names of dir names 
-	var dirCh = make(chan string)
-	// chanel to recive finished dirs
-	var processedCh = make(chan string)
-
-	goprocess(conf, outCh, dirCh, processedCh)
-
-}
-
-//
-//
-//
-func goprocess(conf Config, namesCh, dirCh, processedCh chan string) {
-	startPath := conf.StartPath
-	re := conf.SearchNamePattern
-	fi := processDir(startPath)
-	balancer := make(map[string]bool, 10)
-	go processList(startPath, fi, re, namesCh, dirCh, processedCh)
-	balancer[startPath] = true
-	for {
-		if len(balancer) <= 0 {
-			break
-		}
-		select {
-		case dir := <-dirCh:
-			fi := processDir(dir)
-			go processList(dir, fi, re, namesCh, dirCh, processedCh)
-			balancer[dir] = true
-		case dir := <-processedCh:
-			delete(balancer, dir)
-		}
-	}
-	close(namesCh)
-}
-
-//
-//
-//
-func process(conf Config, namesCh, dirCh, processedCh chan string) []string {
-	startPath := conf.StartPath
-	re := conf.SearchNamePattern
-	fi := processDir(startPath)
-	balancer := make(map[string]bool, 10)
-	var fileList []string
-	go processList(startPath, fi, re, namesCh, dirCh, processedCh)
-	balancer[startPath] = true
-	for {
-		if len(balancer) <= 0 {
-			break
-		}
-		select {
-		case dir := <-dirCh:
-			fi := processDir(dir)
-			go processList(dir, fi, re, namesCh, dirCh, processedCh)
-			balancer[dir] = true
-		case dir := <-processedCh:
-			delete(balancer, dir)
-		case fpath := <-namesCh:
-			fileList = append(fileList, fpath)
-		}
-	}
-	close(namesCh)
-	return fileList
-}
-
-//
-// Process directory given as a path
-//
-func processDir(p string) []os.FileInfo {
+func NewConfig(startDir string, fileNamePattern, contentPattern string) Config {
 	var (
-		f   *os.File
-		fi  []os.FileInfo
-		err error
+		snpRe, scpRe                  *regexp.Regexp
+		searchByName, searchByContent bool
 	)
+	if searchByName = fileNamePattern != ""; searchByName {
+		snpRe = regexp.MustCompile(fileNamePattern)
 
-	if f, err = os.Open(p); err != nil {
-		return fi
 	}
-	defer f.Close()
-	if fi, err = f.Readdir(-1); err != nil {
-		return fi
+	if searchByContent = contentPattern != ""; searchByContent {
+		scpRe = regexp.MustCompile(contentPattern)
 	}
-	return fi
+
+	return Config{startDir, snpRe, scpRe, searchByName, searchByContent}
 }
 
-//
-// Proces list of file infos to search re in files
-//
-func processList(basePath string, list []os.FileInfo, re *regexp.Regexp, namesCh, dirCh, processedCh chan string) {
-	for _, fileInfo := range list {
-		if fileInfo.IsDir() {
-			dirCh <- path.Join(basePath, fileInfo.Name())
+// Find returns list of files which maches to patterns from conf
+func Find(conf Config) []string {
+	go print()
+	wg.Add(1)
+	go searchDir(conf, conf.StartPath)
+	wg.Wait()
+	return results
+}
+
+func searchDir(conf Config, dirPath string) {
+	var (
+		file     *os.File
+		finfos   []os.FileInfo
+		err      error
+		fileName string
+		filePath string
+	)
+	defer wg.Done()
+
+	if file, err = os.Open(dirPath); err != nil {
+		log.Printf("Cannot open dir: %s (%v)\n", filePath, err)
+		return
+	}
+	defer file.Close()
+
+	if finfos, err = file.Readdir(-1); err != nil {
+		log.Printf("Cannot read dir: %s (%v)\n", filePath, err)
+		return
+	}
+	for _, finfo := range finfos {
+		fileName = finfo.Name()
+		filePath = path.Join(dirPath, fileName)
+		fileNameMatch := false
+		if conf.SearchByName {
+			fileNameMatch = conf.SearchNamePattern.MatchString(fileName)
 		}
-		if re.MatchString(fileInfo.Name()) {
-			namesCh <- path.Join(basePath, fileInfo.Name())
+		if conf.SearchByName && fileNameMatch && !conf.SearchByContent {
+			printRes(filePath)
+		}
+		if finfo.IsDir() {
+			wg.Add(1)
+			go searchDir(conf, filePath)
+		} else {
+			if conf.SearchByName && fileNameMatch && conf.SearchByContent {
+				searchFile(conf, filePath)
+			}
+			if !conf.SearchByName && conf.SearchByContent {
+				searchFile(conf, filePath)
+			}
 		}
 	}
-	processedCh <- basePath
+}
+
+func searchFile(conf Config, filePath string) {
+	var (
+		fileCnt []byte
+		err     error
+	)
+	if fileCnt, err = ioutil.ReadFile(filePath); err != nil {
+		log.Printf("Cannot read file: %s\n", filePath)
+		return
+	}
+
+	if conf.SearchContentPattern.Match(fileCnt) {
+		printRes(filePath)
+	}
+
+}
+
+func printRes(fileName string) {
+	fmt.Println(fileName)
+	results = append(results, fileName)
 }
