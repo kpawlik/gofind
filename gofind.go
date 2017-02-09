@@ -18,9 +18,10 @@ const (
 var (
 	//dirQueue chan string = make(chan string, workersNo*100000)
 
-	fileQueue chan string = make(chan string, 10000)
-	//counter   int             = 0
-	//counterMx *sync.Mutex     = &sync.Mutex{}
+	//fileQueue chan string = make(chan string, 10000)
+
+	fileMux     *sync.Mutex     = &sync.Mutex{}
+	dirMux      *sync.Mutex     = &sync.Mutex{}
 	resultQueue *cn             = newCn()
 	wg          *sync.WaitGroup = &sync.WaitGroup{}
 	results     []string        = []string{}
@@ -104,24 +105,16 @@ func Find(conf Config) []string {
 
 func searchDir(conf Config, dirPath string) {
 	var (
-		file     *os.File
 		finfos   []os.FileInfo
 		err      error
 		fileName string
 		filePath string
 	)
 	defer wg.Done()
-
-	if file, err = os.Open(dirPath); err != nil {
-		log.Printf("Cannot open dir: %s (%v)\n", filePath, err)
-		return
+	if finfos, err = readDir(dirPath); err != nil {
+		fmt.Printf("Error reading file: %s (%v)\n", dirPath, err)
 	}
-	defer file.Close()
 
-	if finfos, err = file.Readdir(-1); err != nil {
-		log.Printf("Cannot read dir: %s (%v)\n", filePath, err)
-		return
-	}
 	for _, finfo := range finfos {
 		fileName = finfo.Name()
 		filePath = path.Join(dirPath, fileName)
@@ -146,13 +139,30 @@ func searchDir(conf Config, dirPath string) {
 	}
 }
 
+func readDir(dirPath string) (finfos []os.FileInfo, err error) {
+	var (
+		file *os.File
+	)
+	defer dirMux.Unlock()
+	dirMux.Lock()
+	if file, err = os.Open(dirPath); err != nil {
+		return
+	}
+	finfos, err = file.Readdir(-1)
+	file.Close()
+	return
+
+}
+
 func searchFile(conf Config, filePath string) {
 	var (
 		fileCnt []byte
 		err     error
 	)
+	fileMux.Lock()
+	defer fileMux.Unlock()
 	if fileCnt, err = ioutil.ReadFile(filePath); err != nil {
-		log.Printf("Cannot read file: %s\n", filePath)
+		log.Printf("Cannot read file: %s (%v)\n", filePath, err)
 		return
 	}
 
