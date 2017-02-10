@@ -10,56 +10,12 @@ import (
 	"sync"
 )
 
-const (
-	workersNo = 1
-)
-
 var (
-	//dirQueue chan string = make(chan string, workersNo*100000)
-
-	//fileQueue chan string = make(chan string, 10000)
-
-	fileMux     *sync.Mutex     = &sync.Mutex{}
-	dirMux      *sync.Mutex     = &sync.Mutex{}
-	resultQueue *cn             = newCn()
-	wg          *sync.WaitGroup = &sync.WaitGroup{}
-	results     []string        = []string{}
+	fileMux = &sync.Mutex{}
+	dirMux  = &sync.Mutex{}
+	wg      = &sync.WaitGroup{}
+	results = []string{}
 )
-
-type cn struct {
-	open    bool
-	c       chan string
-	counter int
-	mx      *sync.Mutex
-}
-
-func newCn() *cn {
-	return &cn{true, make(chan string, workersNo*100000), 0, &sync.Mutex{}}
-}
-
-func (c *cn) Send(s string) {
-	c.mx.Lock()
-	c.counter++
-	c.mx.Unlock()
-	c.c <- s
-}
-
-func (c *cn) Get() (string, bool) {
-	res, ok := <-c.c
-	c.mx.Lock()
-	c.counter--
-	c.mx.Unlock()
-	return res, ok
-}
-
-func (c *cn) Close() {
-	if c.open {
-		c.mx.Lock()
-		close(c.c)
-		c.open = false
-		c.mx.Unlock()
-	}
-}
 
 // Config struct of find funcionalitu
 //    StartPath - root directory to start search
@@ -106,7 +62,6 @@ func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, con
 
 // Find returns list of files which maches to patterns from conf
 func Find(conf Config) []string {
-	go print()
 	wg.Add(1)
 	go searchDir(conf, conf.StartPath)
 	wg.Wait()
@@ -183,29 +138,31 @@ func searchFile(conf Config, filePath string) (err error) {
 	if conf.SearchContentPattern.Match(fileCnt) {
 		printRes(filePath)
 		if conf.ShowContext {
-			cbuff := conf.ContextBuffer
-			indexes := conf.SearchContentPattern.FindAllIndex(fileCnt, -1)
-			for _, index := range indexes {
-				start := index[0]
-				if start > cbuff {
-					start = start - cbuff
-				} else {
-					start = 0
-				}
-				end := index[1]
-				if end+cbuff < len(fileCnt) {
-					end = end + cbuff
-				} else {
-					end = len(fileCnt)
-				}
-
-				fmt.Printf("------\n%s\n------\n", fileCnt[start:end])
-			}
+			printMatchContext(fileCnt, conf.SearchContentPattern, conf.ContextBuffer)
 		}
 	}
 	return
 }
 
+func printMatchContext(content []byte, re *regexp.Regexp, bufferSize int) {
+
+	indexes := re.FindAllIndex(content, -1)
+	for _, index := range indexes {
+		start := index[0]
+		if start > bufferSize {
+			start = start - bufferSize
+		} else {
+			start = 0
+		}
+		end := index[1]
+		if end+bufferSize < len(content) {
+			end = end + bufferSize
+		} else {
+			end = len(content)
+		}
+		fmt.Printf("------\n%s\n------\n", content[start:end])
+	}
+}
 func printRes(fileName string) {
 	fmt.Println(fileName)
 	results = append(results, fileName)
