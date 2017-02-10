@@ -18,6 +18,8 @@ var (
 	searchContentPattern string
 	version              bool
 	timeStats            bool
+	quiet                bool
+	context              int
 )
 
 func init() {
@@ -29,6 +31,8 @@ func init() {
 	flag.StringVar(&searchNamePattern, "n", "", "File name patters to search (regexp)")
 	flag.BoolVar(&timeStats, "stat", false, "Print summary")
 	flag.BoolVar(&help, "h", false, "Print help")
+	flag.BoolVar(&quiet, "q", false, "Quiet permission denite errors")
+	flag.IntVar(&context, "context", 0, "Show result context (slower)")
 	flag.Parse()
 	if help {
 		fmt.Println(`Find file / search file content
@@ -52,7 +56,7 @@ Params:
 }
 
 func main() {
-	fconf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern)
+	fconf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context)
 	s := time.Now()
 	results := gofind.Find(fconf)
 	if timeStats {

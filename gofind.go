@@ -4,7 +4,6 @@ package gofind
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"regexp"
@@ -73,12 +72,15 @@ type Config struct {
 	SearchContentPattern *regexp.Regexp
 	SearchByName         bool
 	SearchByContent      bool
+	Quiet                bool
+	ShowContext          bool
+	ContextBuffer        int
 }
 
 //
 // NewConfig create new instance of Config
 //
-func NewConfig(startDir string, fileNamePattern, contentPattern string) Config {
+func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int) Config {
 	var (
 		snpRe, scpRe                  *regexp.Regexp
 		searchByName, searchByContent bool
@@ -91,7 +93,15 @@ func NewConfig(startDir string, fileNamePattern, contentPattern string) Config {
 		scpRe = regexp.MustCompile(contentPattern)
 	}
 
-	return Config{startDir, snpRe, scpRe, searchByName, searchByContent}
+	return Config{StartPath: startDir,
+		SearchNamePattern:    snpRe,
+		SearchContentPattern: scpRe,
+		SearchByName:         searchByName,
+		SearchByContent:      searchByContent,
+		Quiet:                quiet,
+		ShowContext:          contextBuffer > 0,
+		ContextBuffer:        contextBuffer,
+	}
 }
 
 // Find returns list of files which maches to patterns from conf
@@ -112,6 +122,9 @@ func searchDir(conf Config, dirPath string) {
 	)
 	defer wg.Done()
 	if finfos, err = readDir(dirPath); err != nil {
+		if conf.Quiet && os.IsPermission(err) {
+			return
+		}
 		fmt.Printf("Error reading file: %s (%v)\n", dirPath, err)
 	}
 
@@ -130,10 +143,13 @@ func searchDir(conf Config, dirPath string) {
 			go searchDir(conf, filePath)
 		} else {
 			if conf.SearchByName && fileNameMatch && conf.SearchByContent {
-				searchFile(conf, filePath)
+				err = searchFile(conf, filePath)
 			}
 			if !conf.SearchByName && conf.SearchByContent {
-				searchFile(conf, filePath)
+				err = searchFile(conf, filePath)
+			}
+			if err != nil && !conf.Quiet && !os.IsPermission(err) {
+				fmt.Printf("Error reading file %s (%v)\n", filePath, err)
 			}
 		}
 	}
@@ -154,22 +170,40 @@ func readDir(dirPath string) (finfos []os.FileInfo, err error) {
 
 }
 
-func searchFile(conf Config, filePath string) {
+func searchFile(conf Config, filePath string) (err error) {
 	var (
 		fileCnt []byte
-		err     error
 	)
+
 	fileMux.Lock()
 	defer fileMux.Unlock()
 	if fileCnt, err = ioutil.ReadFile(filePath); err != nil {
-		log.Printf("Cannot read file: %s (%v)\n", filePath, err)
 		return
 	}
-
 	if conf.SearchContentPattern.Match(fileCnt) {
 		printRes(filePath)
-	}
+		if conf.ShowContext {
+			cbuff := conf.ContextBuffer
+			indexes := conf.SearchContentPattern.FindAllIndex(fileCnt, -1)
+			for _, index := range indexes {
+				start := index[0]
+				if start > cbuff {
+					start = start - cbuff
+				} else {
+					start = 0
+				}
+				end := index[1]
+				if end+cbuff < len(fileCnt) {
+					end = end + cbuff
+				} else {
+					end = len(fileCnt)
+				}
 
+				fmt.Printf("------\n%s\n------\n", fileCnt[start:end])
+			}
+		}
+	}
+	return
 }
 
 func printRes(fileName string) {
