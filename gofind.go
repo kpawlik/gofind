@@ -11,10 +11,12 @@ import (
 )
 
 var (
-	fileMux = &sync.Mutex{}
-	dirMux  = &sync.Mutex{}
-	wg      = &sync.WaitGroup{}
-	results = []string{}
+	fileMux    = &sync.Mutex{}
+	dirMux     = &sync.Mutex{}
+	counterMux = &sync.Mutex{}
+	wg         = &sync.WaitGroup{}
+	results    = []string{}
+	counter    int
 )
 
 // Config struct of find funcionalitu
@@ -61,11 +63,11 @@ func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, con
 }
 
 // Find returns list of files which maches to patterns from conf
-func Find(conf Config) []string {
+func Find(conf Config) ([]string, int) {
 	wg.Add(1)
 	go searchDir(conf, conf.StartPath)
 	wg.Wait()
-	return results
+	return results, counter
 }
 
 func searchDir(conf Config, dirPath string) {
@@ -76,6 +78,7 @@ func searchDir(conf Config, dirPath string) {
 		filePath string
 	)
 	defer wg.Done()
+	incCounter()
 	if finfos, err = readDir(dirPath); err != nil {
 		if conf.Quiet && os.IsPermission(err) {
 			return
@@ -97,6 +100,7 @@ func searchDir(conf Config, dirPath string) {
 			wg.Add(1)
 			go searchDir(conf, filePath)
 		} else {
+			incCounter()
 			if conf.SearchByName && fileNameMatch && conf.SearchByContent {
 				err = searchFile(conf, filePath)
 			}
@@ -166,4 +170,10 @@ func printMatchContext(content []byte, re *regexp.Regexp, bufferSize int) {
 func printRes(fileName string) {
 	fmt.Println(fileName)
 	results = append(results, fileName)
+}
+
+func incCounter() {
+	counterMux.Lock()
+	counter++
+	counterMux.Unlock()
 }
