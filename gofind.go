@@ -8,15 +8,15 @@ import (
 	"path"
 	"regexp"
 	"sync"
+	"sync/atomic"
 )
 
 var (
-	fileMux    = &sync.Mutex{}
-	dirMux     = &sync.Mutex{}
-	counterMux = &sync.Mutex{}
-	wg         = &sync.WaitGroup{}
-	results    = []string{}
-	counter    int
+	fileMux = &sync.Mutex{}
+	dirMux  = &sync.Mutex{}
+	wg      = &sync.WaitGroup{}
+	results = []string{}
+	counter int32
 )
 
 // Config struct of find funcionalitu
@@ -63,7 +63,7 @@ func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, con
 }
 
 // Find returns list of files which maches to patterns from conf
-func Find(conf Config) ([]string, int) {
+func Find(conf Config) ([]string, int32) {
 	wg.Add(1)
 	go searchDir(conf, conf.StartPath)
 	wg.Wait()
@@ -173,7 +173,5 @@ func printRes(fileName string) {
 }
 
 func incCounter() {
-	counterMux.Lock()
-	counter++
-	counterMux.Unlock()
+	atomic.AddInt32(&counter, 1)
 }

@@ -25,7 +25,7 @@ var (
 	searches             = map[int]findFunc{0: gofind.Find, 1: gofind.WalkFind}
 )
 
-type findFunc func(gofind.Config) ([]string, int)
+type findFunc func(gofind.Config) ([]string, int32)
 
 func init() {
 
@@ -69,7 +69,7 @@ Params:
 func main() {
 	var (
 		results    []string
-		counter    int
+		counter    int32
 		searchFunc findFunc
 		ok         bool
 	)
