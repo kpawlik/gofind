@@ -21,6 +21,7 @@ var (
 	quiet                bool
 	help                 bool
 	context              int
+	showLine             bool
 	stype                int
 	searches             = map[int]findFunc{0: gofind.Find, 1: gofind.WalkFind}
 )
@@ -34,10 +35,11 @@ func init() {
 	flag.StringVar(&searchNamePattern, "name", "", "File name pattern (regexp)")
 	flag.BoolVar(&timeStats, "stat", false, "Print time stats")
 	flag.BoolVar(&help, "help", false, "Print help")
-	flag.BoolVar(&quiet, "quiet", false, "Quiet permission denite errors")
+	flag.BoolVar(&quiet, "quiet", false, "Quiet permission denied errors")
+	flag.BoolVar(&showLine, "line", false, "Show line when pattent was found")
 	flag.IntVar(&context, "context", 0, "Number of chars of find context ")
 	flag.IntVar(&stype, "type", 0, `Search types
-	0 - (defualt) concurrent (fastest, but on Linux, for large no of files to search, may coused error 'to many open files'
+	0 - (defualt) concurrent (fastest, but on Linux, for large no of files to search, may caused error 'to many open files'
 	1 - walk from standard lib)`)
 	flag.Parse()
 	if help {
@@ -73,7 +75,7 @@ func main() {
 		searchFunc findFunc
 		ok         bool
 	)
-	fconf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context)
+	fconf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context, showLine)
 	s := time.Now()
 	if searchFunc, ok = searches[stype]; !ok {
 		printHelp()

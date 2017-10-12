@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -33,12 +34,13 @@ type Config struct {
 	Quiet                bool
 	ShowContext          bool
 	ContextBuffer        int
+	ShowLine             bool
 }
 
 //
 // NewConfig create new instance of Config
 //
-func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int) Config {
+func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int, showLine bool) Config {
 	var (
 		snpRe, scpRe                  *regexp.Regexp
 		searchByName, searchByContent bool
@@ -59,6 +61,7 @@ func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, con
 		Quiet:                quiet,
 		ShowContext:          contextBuffer > 0,
 		ContextBuffer:        contextBuffer,
+		ShowLine:             showLine,
 	}
 }
 
@@ -144,6 +147,9 @@ func searchFile(conf Config, filePath string) (err error) {
 		if conf.ShowContext {
 			printMatchContext(fileCnt, conf.SearchContentPattern, conf.ContextBuffer)
 		}
+		if conf.ShowLine {
+			printMatchLine(fileCnt, conf.SearchContentPattern)
+		}
 	}
 	return
 }
@@ -167,6 +173,21 @@ func printMatchContext(content []byte, re *regexp.Regexp, bufferSize int) {
 		fmt.Printf("------\n%s\n------\n", content[start:end])
 	}
 }
+func printMatchLine(content []byte, re *regexp.Regexp) {
+	indexes := re.FindAllIndex(content, -1)
+	if len(indexes) == 0 {
+		return
+	}
+	strContent := string(content)
+	strs := strings.Split(strContent, "\n")
+	for _, s := range strs {
+		if re.Match([]byte(s)) {
+			fmt.Printf("\n%s\n", s)
+		}
+	}
+
+}
+
 func printRes(fileName string) {
 	fmt.Println(fileName)
 	results = append(results, fileName)
