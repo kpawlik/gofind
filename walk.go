@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// WalkFind search using path.Wask function
+// WalkFind search using path.Walk function
 func WalkFind(conf Config) ([]string, int32) {
 	filepath.Walk(conf.StartPath, func(filePath string, fi os.FileInfo, e error) (err error) {
 		incCounter()

@@ -10,9 +10,6 @@ import (
 )
 
 var (
-	// TODO:
-	// quiet errors permision denite
-	// print found context
 	dir                  string
 	searchNamePattern    string
 	searchContentPattern string
@@ -22,7 +19,8 @@ var (
 	help                 bool
 	context              int
 	showLine             bool
-	stype                int
+	includeSubdirs       bool
+	searchType           int
 	searches             = map[int]findFunc{0: gofind.Find, 1: gofind.WalkFind}
 )
 
@@ -37,9 +35,10 @@ func init() {
 	flag.BoolVar(&help, "help", false, "Print help")
 	flag.BoolVar(&quiet, "quiet", false, "Quiet permission denied errors")
 	flag.BoolVar(&showLine, "line", false, "Show line when pattent was found")
+	flag.BoolVar(&includeSubdirs, "subdirs", true, "Search subdirs")
 	flag.IntVar(&context, "context", 0, "Number of chars of find context ")
-	flag.IntVar(&stype, "type", 0, `Search types
-	0 - (defualt) concurrent (fastest, but on Linux, for large no of files to search, may caused error 'to many open files'
+	flag.IntVar(&searchType, "type", 0, `Search types
+	0 - (default) concurrent (fastest, but on Linux, for large no of files to search, may caused error 'to many open files'
 	1 - walk from standard lib)`)
 	flag.Parse()
 	if help {
@@ -62,7 +61,7 @@ gofind -d [SEARCH ROOT] -n [FILE NAME PATTERN] -c [CONTENT TO SEARCH] -type [0,1
 Params:
 `)
 	flag.PrintDefaults()
-	fmt.Println(`\n Hint: To case insensitive seach use (?i) prefix in regexp pattern`)
+	fmt.Println(`\n Hint: To case insensitive search use (?i) prefix in regexp pattern`)
 	os.Exit(0)
 	return
 
@@ -75,13 +74,13 @@ func main() {
 		searchFunc findFunc
 		ok         bool
 	)
-	fconf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context, showLine)
+	conf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context, showLine, includeSubdirs)
 	s := time.Now()
-	if searchFunc, ok = searches[stype]; !ok {
+	if searchFunc, ok = searches[searchType]; !ok {
 		printHelp()
 		return
 	}
-	results, counter = searchFunc(fconf)
+	results, counter = searchFunc(conf)
 	if timeStats {
 		fmt.Printf("Searched: %d. Found: %d\nTime: %s\n", counter, len(results), time.Now().Sub(s))
 	}

@@ -1,4 +1,4 @@
-// gofind.go
+// Package gofind includes methods and structures to search by file name and file content
 package gofind
 
 import (
@@ -20,10 +20,10 @@ var (
 	counter int32
 )
 
-// Config struct of find funcionalitu
+// Config struct of find functionality
 //    StartPath - root directory to start search
 //    SearchPatter - regular expression with patter to search
-//    PrintErrors - print errors about opennung files, access denied etc
+//    PrintErrors - print errors about opening files, access denied etc
 //    PrintStatistics - print stats how long search was made
 type Config struct {
 	StartPath            string
@@ -35,12 +35,13 @@ type Config struct {
 	ShowContext          bool
 	ContextBuffer        int
 	ShowLine             bool
+	IncludeSubdirs       bool
 }
 
 //
 // NewConfig create new instance of Config
 //
-func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int, showLine bool) Config {
+func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int, showLine bool, includeSubdirs bool) Config {
 	var (
 		snpRe, scpRe                  *regexp.Regexp
 		searchByName, searchByContent bool
@@ -62,6 +63,7 @@ func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, con
 		ShowContext:          contextBuffer > 0,
 		ContextBuffer:        contextBuffer,
 		ShowLine:             showLine,
+		IncludeSubdirs:       includeSubdirs,
 	}
 }
 
@@ -75,22 +77,22 @@ func Find(conf Config) ([]string, int32) {
 
 func searchDir(conf Config, dirPath string) {
 	var (
-		finfos   []os.FileInfo
-		err      error
-		fileName string
-		filePath string
+		filesInfos []os.FileInfo
+		err        error
+		fileName   string
+		filePath   string
 	)
 	defer wg.Done()
 	incCounter()
-	if finfos, err = readDir(dirPath); err != nil {
+	if filesInfos, err = readDir(dirPath); err != nil {
 		if conf.Quiet && os.IsPermission(err) {
 			return
 		}
 		fmt.Printf("Error reading file: %s (%v)\n", dirPath, err)
 	}
 
-	for _, finfo := range finfos {
-		fileName = finfo.Name()
+	for _, fileInfo := range filesInfos {
+		fileName = fileInfo.Name()
 		filePath = path.Join(dirPath, fileName)
 		fileNameMatch := false
 		if conf.SearchByName {
@@ -99,7 +101,7 @@ func searchDir(conf Config, dirPath string) {
 		if conf.SearchByName && fileNameMatch && !conf.SearchByContent {
 			printRes(filePath)
 		}
-		if finfo.IsDir() {
+		if fileInfo.IsDir() && conf.IncludeSubdirs {
 			wg.Add(1)
 			go searchDir(conf, filePath)
 		} else {
@@ -117,7 +119,7 @@ func searchDir(conf Config, dirPath string) {
 	}
 }
 
-func readDir(dirPath string) (finfos []os.FileInfo, err error) {
+func readDir(dirPath string) (filesInfos []os.FileInfo, err error) {
 	var (
 		file *os.File
 	)
@@ -126,10 +128,9 @@ func readDir(dirPath string) (finfos []os.FileInfo, err error) {
 	if file, err = os.Open(dirPath); err != nil {
 		return
 	}
-	finfos, err = file.Readdir(-1)
+	filesInfos, err = file.Readdir(-1)
 	file.Close()
 	return
-
 }
 
 func searchFile(conf Config, filePath string) (err error) {
@@ -173,19 +174,19 @@ func printMatchContext(content []byte, re *regexp.Regexp, bufferSize int) {
 		fmt.Printf("------\n%s\n------\n", content[start:end])
 	}
 }
+
 func printMatchLine(content []byte, re *regexp.Regexp) {
 	indexes := re.FindAllIndex(content, -1)
 	if len(indexes) == 0 {
 		return
 	}
 	strContent := string(content)
-	strs := strings.Split(strContent, "\n")
-	for _, s := range strs {
-		if re.Match([]byte(s)) {
-			fmt.Printf("\n%s\n", s)
+	lines := strings.Split(strContent, "\n")
+	for _, line := range lines {
+		if re.Match([]byte(line)) {
+			fmt.Printf("%s\n", line)
 		}
 	}
-
 }
 
 func printRes(fileName string) {
