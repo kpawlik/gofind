@@ -28,8 +28,8 @@ type findFunc func(gofind.Config) ([]string, int32)
 
 func init() {
 
-	flag.StringVar(&dir, "dir", "", "Start directory (current by default)")
-	flag.StringVar(&searchContentPattern, "content", "", "File content seaerch pattern (regexp)")
+	flag.StringVar(&dir, "dir", "", "Start directory (by default current directory)")
+	flag.StringVar(&searchContentPattern, "content", "", "File content search pattern (regexp)")
 	flag.StringVar(&searchNamePattern, "name", "", "File name pattern (regexp)")
 	flag.BoolVar(&timeStats, "stat", false, "Print time stats")
 	flag.BoolVar(&help, "help", false, "Print help")
@@ -55,16 +55,19 @@ func init() {
 }
 
 func printHelp() {
-	fmt.Println(`Find file with name matches to pattern or search file content for pattern.
-gofind -d [SEARCH ROOT] -n [FILE NAME PATTERN] -c [CONTENT TO SEARCH] -type [0,1]
+	fmt.Println(`Find file with name matches to pattern or/and search file content for pattern.
 
-Params:
+	./gofind --dir [SEARCH ROOT] --name [FILE NAME PATTERN] --content [CONTENT TO SEARCH]
+
+To case insensitive search use (?i) prefix in regexp pattern. 
+Example:
+	./gofind --name "(?)file_name" 	--content "(?)case_ins_text"
+
+	Params:
 `)
 	flag.PrintDefaults()
-	fmt.Println(`\n Hint: To case insensitive search use (?i) prefix in regexp pattern`)
 	os.Exit(0)
 	return
-
 }
 
 func main() {
