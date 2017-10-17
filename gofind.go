@@ -101,9 +101,11 @@ func searchDir(conf Config, dirPath string) {
 		if conf.SearchByName && fileNameMatch && !conf.SearchByContent {
 			printRes(filePath)
 		}
-		if fileInfo.IsDir() && conf.IncludeSubdirs {
-			wg.Add(1)
-			go searchDir(conf, filePath)
+		if fileInfo.IsDir() {
+			if conf.IncludeSubdirs {
+				wg.Add(1)
+				go searchDir(conf, filePath)
+			}
 		} else {
 			incCounter()
 			if conf.SearchByName && fileNameMatch && conf.SearchByContent {
