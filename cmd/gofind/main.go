@@ -61,9 +61,16 @@ func printHelp() {
 
 To case insensitive search use (?i) prefix in regexp pattern. 
 Example:
-	./gofind --name "(?)file_name" 	--content "(?)case_ins_text"
+This command will lists all files with extensions csv, CSV, Csv etc., which contains text "case ins text". Matching will be case insensitive. 
+	./gofind --name "(?).*csv$" --content "(?)case ins text"
 
-	Params:
+To search only directory, without subdirectories  use --subdirs=false
+Example:
+This command will lists all files with extension csv, only from directory /tmp/files
+
+	./gofind --dir /tmp/files/ --name .*csv$ --subdirs=false
+
+Parameters:
 `)
 	flag.PrintDefaults()
 	os.Exit(0)
