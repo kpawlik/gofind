@@ -19,6 +19,7 @@ var (
 	help                 bool
 	context              int
 	showLine             bool
+	includeGzip          bool
 	includeSubdirs       bool
 	searchType           int
 	searches             = map[int]findFunc{0: gofind.Find, 1: gofind.WalkFind}
@@ -35,7 +36,9 @@ func init() {
 	flag.BoolVar(&help, "help", false, "Print help")
 	flag.BoolVar(&quiet, "quiet", false, "Quiet permission denied errors")
 	flag.BoolVar(&showLine, "line", false, "Show line when pattent was found")
+	flag.BoolVar(&version, "version", false, "Print version no")
 	flag.BoolVar(&includeSubdirs, "subdirs", true, "Search subdirs")
+	flag.BoolVar(&includeGzip, "gzip", false, "Include gzip")
 	flag.IntVar(&context, "context", 0, "Number of chars of find context ")
 	flag.IntVar(&searchType, "type", 0, `Search types
 	0 - (default) concurrent (fastest, but on Linux, for large no of files to search, may caused error 'to many open files'
@@ -43,6 +46,9 @@ func init() {
 	flag.Parse()
 	if help {
 		printHelp()
+	}
+	if version {
+		fmt.Println("20180517A")
 	}
 	if searchNamePattern == "" && searchContentPattern == "" {
 		flag.PrintDefaults()
@@ -84,7 +90,7 @@ func main() {
 		searchFunc findFunc
 		ok         bool
 	)
-	conf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context, showLine, includeSubdirs)
+	conf := gofind.NewConfig(dir, searchNamePattern, searchContentPattern, quiet, context, showLine, includeSubdirs, includeGzip)
 	s := time.Now()
 	if searchFunc, ok = searches[searchType]; !ok {
 		printHelp()

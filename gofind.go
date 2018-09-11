@@ -2,6 +2,7 @@
 package gofind
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -36,12 +37,13 @@ type Config struct {
 	ContextBuffer        int
 	ShowLine             bool
 	IncludeSubdirs       bool
+	IncludeGzip          bool
 }
 
 //
 // NewConfig create new instance of Config
 //
-func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int, showLine bool, includeSubdirs bool) Config {
+func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, contextBuffer int, showLine bool, includeSubdirs bool, includeGzip bool) Config {
 	var (
 		snpRe, scpRe                  *regexp.Regexp
 		searchByName, searchByContent bool
@@ -64,6 +66,7 @@ func NewConfig(startDir, fileNamePattern, contentPattern string, quiet bool, con
 		ContextBuffer:        contextBuffer,
 		ShowLine:             showLine,
 		IncludeSubdirs:       includeSubdirs,
+		IncludeGzip:          includeGzip,
 	}
 }
 
@@ -137,13 +140,30 @@ func readDir(dirPath string) (filesInfos []os.FileInfo, err error) {
 
 func searchFile(conf Config, filePath string) (err error) {
 	var (
-		fileCnt []byte
+		fileCnt  []byte
+		gzFile   *os.File
+		gzReader *gzip.Reader
 	)
 
 	fileMux.Lock()
 	defer fileMux.Unlock()
-	if fileCnt, err = ioutil.ReadFile(filePath); err != nil {
-		return
+	if strings.HasSuffix(filePath, ".gz") && conf.IncludeGzip {
+		if gzFile, err = os.Open(filePath); err != nil {
+			return
+		}
+
+		defer gzFile.Close()
+		if gzReader, err = gzip.NewReader(gzFile); err != nil {
+			return
+		}
+		defer gzReader.Close()
+		if fileCnt, err = ioutil.ReadAll(gzReader); err != nil {
+			return
+		}
+	} else {
+		if fileCnt, err = ioutil.ReadFile(filePath); err != nil {
+			return
+		}
 	}
 	if conf.SearchContentPattern.Match(fileCnt) {
 		printRes(filePath)
